@@ -1,0 +1,45 @@
+# The daily probe of what this plugin depends on and no commit here can break:
+# BLAT and in-silico PCR go through the jbrowse.org proxy to UCSC's hgBlat and
+# hgPcr, and the plugin parses what those CGIs answer. UCSC has changed that
+# answer before (hgPcr's amplicon header). What a red run means is written in
+# the test it runs (src/liveProxy.test.ts): the deployed proxy is up,
+# authorized, and what it relays still parses.
+#
+# It spends two of the shared key's daily queries, bypassing the proxy's cache
+# on purpose: a probe answered from a 24h cache would pass over a dead UCSC.
+# When it goes red, jbrowse-components' products/aws/blat-proxy/README.md
+# section "Outage notice" says how to tell every open dialog what happened.
+name: Canary
+
+on:
+  schedule:
+    - cron: '30 6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  proxy-round-trip:
+    name: Proxy round-trip to UCSC
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
+        with:
+          version: latest
+      - name: Use Node.js 24.x
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24.x
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Query both routes through the deployed proxy
+        env:
+          JBROWSE_UCSC_PROXY_URL: https://api.jbrowse.org/ucsc/v1
+        run: pnpm exec vitest run src/liveProxy.test.ts

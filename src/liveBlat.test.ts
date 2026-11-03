@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Live UCSC round-trip: a real hgBlat response, parsed and converted to SAM.
  *
@@ -70,7 +71,7 @@ function substitute(seq: string, at: number, base: string) {
 // oxlint-disable-next-line jest/no-disabled-tests -- deliberate, see above
 describe.skip('live UCSC BLAT round-trip', () => {
   it('places four variants of a known hg38 locus back at that locus', async () => {
-    fetchMock.dontMock()
+    fetchMock.disableMocks()
 
     const seqRes = await fetch(
       `https://api.genome.ucsc.edu/getData/sequence?genome=${DB};chrom=${CHROM};start=${START};end=${END}`,

@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Live round-trip through the deployed `products/aws/blat-proxy` Lambda, for both routes.
  *
@@ -77,7 +78,7 @@ maybe('live UCSC proxy round-trip', () => {
   let ref = ''
 
   beforeAll(async () => {
-    fetchMock.dontMock()
+    fetchMock.disableMocks()
     const res = await fetch(
       `https://api.genome.ucsc.edu/getData/sequence?genome=${DB};chrom=${CHROM};start=${START};end=${END}`,
     )
