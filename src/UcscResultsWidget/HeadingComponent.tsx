@@ -8,7 +8,7 @@ const HeadingComponent = observer(function HeadingComponent({
   model?: { trackName?: string }
 }) {
   return (
-    <Typography variant="h6" color="inherit">
+    <Typography variant="h6" color="inherit" noWrap>
       {model?.trackName ?? 'Search results'}
     </Typography>
   )
