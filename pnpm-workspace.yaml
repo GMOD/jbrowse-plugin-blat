@@ -1,0 +1,5 @@
+allowBuilds:
+  esbuild: true
+# our own packages, which this plugin builds against the day they release
+minimumReleaseAgeExclude:
+  - '@jbrowse/*'
