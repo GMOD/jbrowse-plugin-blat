@@ -9,6 +9,8 @@ import { isSameAssemblyName } from '@jbrowse/core/util/tracks'
 
 import { assemblyToUcscDb } from './ucscDbMap.ts'
 
+import type { ReferenceReader } from './spliceJunctions.ts'
+import type RpcManager from '@jbrowse/core/rpc/RpcManager'
 import type {
   AbstractViewContainer,
   AbstractViewModel,
@@ -26,7 +28,9 @@ import type {
  * a guard, because a host may not offer it.
  */
 export interface UcscHost
-  extends AbstractViewContainer, AssemblyHost, NotificationSink, DialogHost {}
+  extends AbstractViewContainer, AssemblyHost, NotificationSink, DialogHost {
+  rpcManager: RpcManager
+}
 
 interface NavigableView extends AbstractViewModel {
   launchTrack: (trackId: string) => Promise<unknown>
@@ -60,6 +64,37 @@ export function ucscDbStamp(
   return conf
     ? readConfObject(conf, ['sequence', 'metadata', 'blatDb'])
     : undefined
+}
+
+// Reads reference bases under a hit's tName, the UCSC sequence name, which the
+// assembly's aliases resolve to the name its sequence adapter uses.
+export function referenceReader(
+  session: UcscHost,
+  assemblyName: string,
+): ReferenceReader {
+  return async (refName, start, end) => {
+    const assembly = await session.assemblyManager.waitForAssembly(assemblyName)
+    const conf = assembly?.configuration
+    if (!assembly || !conf) {
+      throw new Error(`assembly ${assemblyName} has no configuration to read`)
+    }
+    const seq = await session.rpcManager.call(
+      'blatSpliceSites',
+      'CoreGetSequence',
+      {
+        adapterConfig: readConfObject(conf, ['sequence', 'adapter']),
+        region: {
+          refName: assembly.getSeqAdapterRefName(
+            assembly.getCanonicalRefName2(refName),
+          ),
+          start,
+          end,
+          assemblyName,
+        },
+      },
+    )
+    return seq ?? ''
+  }
 }
 
 // Prefers the stamp, falling back to the static alias map for assemblies whose

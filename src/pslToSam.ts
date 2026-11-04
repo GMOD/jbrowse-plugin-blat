@@ -1,8 +1,10 @@
 import { revcom } from '@jbrowse/core/util'
 
 import { parseFastaRecords } from './blatQuery.ts'
+import { isIntronCandidate } from './spliceJunctions.ts'
 
 import type { PslRow } from './blatQuery.ts'
+import type { BlatHit } from './spliceJunctions.ts'
 
 /**
  * PSL states a hit as a list of aligned blocks in both query and target
@@ -10,9 +12,10 @@ import type { PslRow } from './blatQuery.ts'
  * an M run, the target gap between two blocks is a D, the query gap an I, and
  * the unaligned query ends are soft clips.
  *
- * D rather than N for every target gap: a DNA BLAT hit cannot tell an intron
- * from a deletion (a spliced-mRNA query would want N, a diverged genomic query
- * D), and psl2sam takes the same position. The gap is drawn either way.
+ * A target gap is an N, a skip drawn as a thin line, where the hit is spliced
+ * and the gap is one of its intron candidates; any other target gap is a D.
+ * PSL alone cannot tell the two apart, which is why psl2sam writes D for all of
+ * them; `spliced` comes from the reference bases (see spliceJunctions.ts).
  *
  * Coordinates are the ones PSL states, which for a `-` strand hit means
  * `blockSizes`/`qStarts` are in reverse-complement query space — the same space
@@ -20,17 +23,20 @@ import type { PslRow } from './blatQuery.ts'
  * makes the soft clips and the per-base mismatches land in the right place, so
  * {@link pslQuerySeq} reverse-complements to match.
  */
-export function pslToCigar({
-  blockSizes,
-  qStarts,
-  tStarts,
-  qSize,
-}: {
-  blockSizes: number[]
-  qStarts: number[]
-  tStarts: number[]
-  qSize: number
-}) {
+export function pslToCigar(
+  {
+    blockSizes,
+    qStarts,
+    tStarts,
+    qSize,
+  }: {
+    blockSizes: number[]
+    qStarts: number[]
+    tStarts: number[]
+    qSize: number
+  },
+  spliced: boolean,
+) {
   // a row stating no blocks describes no alignment; '*' is SAM's word for that,
   // where the empty string the loop would otherwise build is an unparseable
   // CIGAR column
@@ -50,7 +56,9 @@ export function pslToCigar({
         ops.push(`${queryGap}I`)
       }
       if (targetGap > 0) {
-        ops.push(`${targetGap}D`)
+        ops.push(
+          `${targetGap}${spliced && isIntronCandidate(queryGap, targetGap) ? 'N' : 'D'}`,
+        )
       }
     }
     ops.push(`${blockSizes[i]!}M`)
@@ -100,7 +108,7 @@ function editDistance(row: PslRow) {
  * probability, so any number here would be invented.
  */
 function pslRowToSamLine(
-  row: PslRow,
+  { row, spliced }: BlatHit,
   querySequences: Map<string, string>,
   bestOf: Set<string>,
 ) {
@@ -113,7 +121,7 @@ function pslRowToSamLine(
     row.tName,
     row.tStart + 1,
     255,
-    pslToCigar(row),
+    pslToCigar(row, spliced),
     '*',
     0,
     0,
@@ -129,19 +137,19 @@ function pslRowToSamLine(
  * `@SQ` lines come from the target sizes PSL already states, so the track knows
  * its reference names without consulting the assembly.
  *
- * Rows arrive best-first (pslToFeatures sorts by score), which is what decides
+ * Hits arrive best-first (pslToFeatures sorts by score), which is what decides
  * each query's primary alignment.
  */
 export function pslToSam(
-  rows: PslRow[],
+  hits: BlatHit[],
   querySequences: Map<string, string>,
 ): string {
-  const targetSizes = new Map(rows.map(row => [row.tName, row.tSize]))
+  const targetSizes = new Map(hits.map(({ row }) => [row.tName, row.tSize]))
   const bestOf = new Set<string>()
   return [
     '@HD\tVN:1.6',
     ...[...targetSizes].map(([name, size]) => `@SQ\tSN:${name}\tLN:${size}`),
-    ...rows.map(row => pslRowToSamLine(row, querySequences, bestOf)),
+    ...hits.map(hit => pslRowToSamLine(hit, querySequences, bestOf)),
     '',
   ].join('\n')
 }

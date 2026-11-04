@@ -102,7 +102,10 @@ maybe('live UCSC proxy round-trip', () => {
     const rows = parseBlatResponse(text)
     expect(rows.length).toBeGreaterThan(0)
 
-    const sam = pslToSam(rows, parseQuerySequences(ref))
+    const sam = pslToSam(
+      rows.map(row => ({ row, spliced: false })),
+      parseQuerySequences(ref),
+    )
     const best = sam
       .split('\n')
       .find(line => line && !line.startsWith('@'))!

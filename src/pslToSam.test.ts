@@ -123,11 +123,17 @@ function cigarSpan(cigar: string, ops: string) {
 }
 
 test('a single block becomes one M run between soft clips', () => {
-  expect(pslToCigar(rows([forward])[0]!)).toBe('1S146M')
+  expect(pslToCigar(rows([forward])[0]!, false)).toBe('1S146M')
 })
 
 test('a query gap is an I and a target gap a D', () => {
-  expect(pslToCigar(rows([reverse])[0]!)).toBe('31M1I6D101M131D13M1S')
+  expect(pslToCigar(rows([reverse])[0]!, false)).toBe('31M1I6D101M131D13M1S')
+})
+
+// the 131 bp gap is an intron candidate; the 6 bp one sits beside a query
+// insert and is short, so it stays a deletion even in a spliced hit
+test("a spliced hit's intron candidates are skips, its other gaps deletions", () => {
+  expect(pslToCigar(rows([reverse])[0]!, true)).toBe('31M1I6D101M131N13M1S')
 })
 
 // a row with no blocks describes no alignment; the loop used to build the empty
@@ -138,6 +144,7 @@ test('a blockless row states no CIGAR rather than an empty one', () => {
       rows([
         withFields(forward, { blockSizes: '', qStarts: '', tStarts: '' }),
       ])[0]!,
+      false,
     ),
   ).toBe('*')
 })
@@ -153,7 +160,7 @@ test.each([
   '%s: the CIGAR spans exactly the target and query PSL reports',
   (_n, psl) => {
     const row = rows([psl])[0]!
-    const cigar = pslToCigar(row)
+    const cigar = pslToCigar(row, false)
     expect(cigarSpan(cigar, 'MDN')).toBe(row.tEnd - row.tStart)
     expect(cigarSpan(cigar, 'MIS')).toBe(row.qSize)
   },
@@ -166,7 +173,7 @@ test('a hit with no unaligned query ends carries no soft clips', () => {
   flush[12] = 147
   flush[18] = '147'
   flush[19] = '0'
-  expect(pslToCigar(rows([flush])[0]!)).toBe('147M')
+  expect(pslToCigar(rows([flush])[0]!, false)).toBe('147M')
 })
 
 // PSL states a minus-strand hit's query coordinates in reverse-complement
@@ -202,8 +209,11 @@ test('a single submitted sequence answers for a hit under any name', () => {
   ).toBe('ACGTACGT')
 })
 
+const unspliced = (blat: (string | number)[][]) =>
+  rows(blat).map(row => ({ row, spliced: false }))
+
 const samLines = (blat: (string | number)[][], queries: Map<string, string>) =>
-  pslToSam(rows(blat), queries).split('\n').filter(Boolean)
+  pslToSam(unspliced(blat), queries).split('\n').filter(Boolean)
 
 const samRecords = (
   blat: (string | number)[][],

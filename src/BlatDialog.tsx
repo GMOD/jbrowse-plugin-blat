@@ -20,10 +20,32 @@ import {
   queryLabel,
 } from './blatQuery.ts'
 import { parseQuerySequences, pslToSam } from './pslToSam.ts'
-import { canRenderAlignments, viewedAssembly } from './ucscShared.ts'
+import { spliceHits } from './spliceJunctions.ts'
+import {
+  canRenderAlignments,
+  referenceReader,
+  viewedAssembly,
+} from './ucscShared.ts'
 import { useUcscQuery } from './useUcscQuery.ts'
 
+import type { PslRow } from './blatQuery.ts'
 import type { UcscHost } from './ucscShared.ts'
+
+// A reference that cannot be read leaves every target gap a deletion, which is
+// how the hit drew before splice sites were read, rather than failing a search
+// that did find hits.
+async function readSplicing(
+  session: UcscHost,
+  assemblyName: string,
+  rows: PslRow[],
+) {
+  try {
+    return await spliceHits(rows, referenceReader(session, assemblyName))
+  } catch (e) {
+    console.error('BLAT: could not read splice sites', e)
+    return rows.map(row => ({ row, spliced: false }))
+  }
+}
 
 const BlatDialog = observer(function BlatDialog({
   session,
@@ -76,7 +98,10 @@ const BlatDialog = observer(function BlatDialog({
                 type: 'AlignmentsTrack',
                 adapter: {
                   type: 'SamAdapter',
-                  samText: pslToSam(rows, parseQuerySequences(seq)),
+                  samText: pslToSam(
+                    await readSplicing(session, query.assembly, rows),
+                    parseQuerySequences(seq),
+                  ),
                 },
                 // A handful of hits has no depth to read, so the coverage band is 45
                 // pixels saying "1" over the one place the query landed. The hits

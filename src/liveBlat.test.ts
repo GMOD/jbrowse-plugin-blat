@@ -104,7 +104,10 @@ describe.skip('live UCSC BLAT round-trip', () => {
       body: `${buildBlatBody({ db: DB, seq: query })}&apiKey=${apiKey}`,
     })
     const rows = parseBlatResponse(await res.text())
-    const sam = pslToSam(rows, parseQuerySequences(query))
+    const sam = pslToSam(
+      rows.map(row => ({ row, spliced: false })),
+      parseQuerySequences(query),
+    )
     const lines = samLines(sam)
     const primary = new Map(
       lines.filter(l => !(l.flag & 256)).map(l => [l.qName, l]),
