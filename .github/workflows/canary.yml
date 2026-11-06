@@ -15,6 +15,11 @@ on:
   schedule:
     - cron: '30 6 * * *'
   workflow_dispatch:
+    inputs:
+      alert_test:
+        description: Fail on purpose, to check that a red run reaches the alert email
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}
@@ -28,6 +33,9 @@ jobs:
     name: Proxy round-trip to UCSC
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
@@ -43,3 +51,22 @@ jobs:
         env:
           JBROWSE_UCSC_PROXY_URL: https://api.jbrowse.org/ucsc/v1
         run: pnpm exec vitest run src/liveProxy.test.ts
+      - name: Fail on purpose
+        if: inputs.alert_test
+        run: exit 1
+      # Actions mails a red scheduled run only to whoever last pushed this file,
+      # so a red run publishes its URL to the blat-proxy stack's SNS topic,
+      # which mails the alert addresses. The role is jbrowse-components'
+      # products/aws/github-oidc stack, assumable only from this repo's main.
+      - name: Mail the red run
+        if: failure()
+        uses: aws-actions/configure-aws-credentials@517a711dbcd0e402f90c77e7e2f81e849156e31d # v6.2.2
+        with:
+          role-to-assume: arn:aws:iam::410987773811:role/jbrowse-blat-canary-publisher
+          aws-region: us-east-1
+      - if: failure()
+        run: >-
+          aws sns publish
+          --topic-arn arn:aws:sns:us-east-1:410987773811:jbrowse-blat-canary
+          --subject "JBrowse BLAT canary is red"
+          --message "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
