@@ -112,7 +112,7 @@ const BlatDialog = observer(function BlatDialog({
                 // single-hit track grown to its content comes out with the read
                 // clipped by the bottom edge of the view. Left off until that is
                 // understood.
-                displayDefaults: { showCoverage: false },
+                displayDefaults: { coverage: { show: false } },
               }
             : undefined,
         }

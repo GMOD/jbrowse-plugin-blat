@@ -175,13 +175,13 @@ test('defaults to a FromConfigAdapter feature track, and takes an override', asy
     trackConf: {
       type: 'AlignmentsTrack',
       adapter: { type: 'SamAdapter', samText: '@HD\tVN:1.6\n' },
-      displayDefaults: { showCoverage: false },
+      displayDefaults: { coverage: { show: false } },
     },
   })
   expect(overridden.calls.addedTracks[0]).toMatchObject({
     type: 'AlignmentsTrack',
     adapter: { type: 'SamAdapter' },
-    displayDefaults: { showCoverage: false },
+    displayDefaults: { coverage: { show: false } },
   })
 })
 

@@ -89,7 +89,7 @@ const IsPcrDialog = observer(function IsPcrDialog({
                   // a handful of products has no depth to read, and the pair glyph is
                   // the whole point, so it is on rather than a menu step away
                   displayDefaults: {
-                    showCoverage: false,
+                    coverage: { show: false },
                     unit: 'chain',
                   },
                 }
